@@ -1,52 +1,100 @@
 const bcrypt = require('bcryptjs'); 
-const jwt = require('jsonwebtoken'); // <-- ADD THIS LINE
+const jwt = require('jsonwebtoken'); 
 const dotenv = require('dotenv');
 
-// Load environment variables (ensure this is done once, but harmless to repeat)
+
 dotenv.config();
 
 const User = require('../models/User');
 
-// Export the registration logic as a function
-exports.registerUser = async (req, res) => {
-    try {
-        const { username, password } = req.body;
 
-        // 1. Check if user already exists (database check)
-        let user = await User.findOne({ username });
+// ... existing imports ...
+
+exports.registerAdmin = async (req, res) => {
+    try {
+        const { 
+            email, 
+            password
+        } = req.body;
+
+        const placeholder = 'Admin Default';
+        const placeholderPhone = '000-000-0000'; 
+
+        let user = await User.findOne({ email });
 
         if (user) {
-            return res.status(400).send('User already exists.');
+            return res.status(400).send('User already exists with this email.');
         }
 
-        // 2. Generate a Salt and Hash the password
         const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(password, salt); 
+        const hashedPassword = await bcrypt.hash(password, salt);
 
-        // 3. Save the new user (database save operation)
         user = new User({
-            username,
-            password: hashedPassword 
-        })
-        await user.save(); 
+            email,
+            password: hashedPassword, 
+            firstName: placeholder,
+            lastName: placeholder,
+            phoneNumber: placeholderPhone, 
+            address: placeholder,
+            role: 'admin'   
+        });
 
-        // 4. Send success response
-        console.log(`New user registered: ${username}`);
-        res.status(201).send({ message: 'User registered successfully! sperma v jope' });
+        await user.save();
+        res.status(201).send({ message: 'Admin registered successfully!' });
 
     } catch (err) {
-        console.error(err);
+        console.error(err.message);
         res.status(500).send('Server Error during registration.');
     }
 };
 
-// Export the login logic as a function
+exports.registerUser = async (req, res) => {
+    try {
+        const { 
+            email, 
+            password, 
+            firstName, 
+            lastName, 
+            phoneNumber, 
+            address 
+        } = req.body;
+
+        let user = await User.findOne({ email });
+
+        if (user) {
+            return res.status(400).send('User already exists with this email.');
+        }
+
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
+
+        user = new User({
+            email,
+            password: hashedPassword, 
+            firstName,
+            lastName,
+            phoneNumber,
+            address
+        });
+
+        await user.save();
+
+        // 4. Send success response
+        console.log(`New user registered: ${email}`);
+        res.status(201).send({ message: 'User registered successfully!' });
+
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error during registration.');
+    }
+};
+
+
 exports.loginUser = async (req, res) => {
     try {
-        const { username, password } = req.body;
+        const { email, password } = req.body;
 
-        let user = await User.findOne({ username }); // <-- NEW
-
+        let user = await User.findOne({ email });  
         // Check if user exists
         if (!user) {
             return res.status(400).send('Invalid Credentials');
@@ -64,7 +112,8 @@ exports.loginUser = async (req, res) => {
         // The payload is the data we want to embed in the token (e.g., user ID)
         const payload = {
             user: {
-                id: user.id
+                id: user.id,
+                role: user.role
             }
         };
 
@@ -76,10 +125,11 @@ exports.loginUser = async (req, res) => {
             { expiresIn: '1h' },
             (err, token) => {
                 if (err) throw err;
-                
-                // 4. Send Token to the Client
-                // The frontend will store this token and send it with every protected request
-                res.json({ token });
+                res.json({ 
+                    token,
+                    role: user.role,
+                    name: email
+                });
             }
         );
 

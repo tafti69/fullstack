@@ -3,8 +3,12 @@ const connectDB = require('./config/db');
 const dotenv = require('dotenv');
 const cors = require('cors');
 
-const authController = require('./controllers/authController'); // <-- Import the controller
+const authController = require('./controllers/authController'); 
 const auth = require('./middleware/authMiddleware');
+const CountryAddress = require('./models/CountryAddress');
+const Shop = require('./models/Shops');
+const Flight = require('./models/Flight');
+const Order = require('./models/Order');
 
 // Load environment variables from .env file
 dotenv.config(); 
@@ -32,31 +36,179 @@ app.get('/', (req, res) => {
     res.send('Welcome to the Authentication Backend!');
 });
 
-// === REGISTRATION ROUTE ===
-// We use the imported function here!
+app.post('/api/admin', authController.registerAdmin); 
+
 app.post('/api/register', authController.registerUser); 
 
 app.post('/api/login', authController.loginUser);
 
-// === PROTECTED ROUTE ===
-// To protect this route, we insert the 'auth' middleware function 
-// as the second argument to the app.get() method.
-app.get('/api/profile', auth, (req, res) => {
-    // The request only reaches here IF the token was valid.
-    
-    // The middleware attached the user ID to req.user
-    // In a real app, you would use req.user.id to fetch the user's full data from the database.
-    
-    console.log(`Access granted for User ID: ${req.user.id}`);
-    
-    res.json({
-        msg: 'Welcome to your protected profile!',
-        userId: req.user.id,
-        // The token is valid and you are logged in!
-    });
+app.post('/api/countries', async (req, res) => {
+    try {
+        const newCountry = new CountryAddress(req.body);
+        const country = await newCountry.save();
+        res.status(201).json(country);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error creating country.');
+    }
+});
+
+app.get('/api/countries', async (req, res) => {
+    try {
+        const countries = await CountryAddress.find();
+        res.json(countries);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error fetching countries.');
+    }
+});
+
+app.delete('/api/countries/:id', async (req, res) => {
+    try {
+        const countryId = req.params.id;
+        
+        // 1. Check if the country exists
+        let country = await CountryAddress.findById(countryId);
+        if (!country) {
+            return res.status(404).json({ msg: 'Country not found.' });
+        }
+        
+        // 2. Remove the country
+        await CountryAddress.findByIdAndDelete(countryId);
+
+        // Success response (200 OK, or 204 No Content is also common for delete)
+        res.json({ msg: 'Country address removed successfully.' });
+
+    } catch (err) {
+        console.error(err.message);
+        // This usually catches invalid ID format (CastError)
+        if (err.kind === 'ObjectId') {
+            return res.status(404).json({ msg: 'Country not found.' });
+        }
+        res.status(500).send('Server Error deleting country.');
+    }
 });
 
 
+
+app.post('/api/shops', async (req, res) => {
+    // Requires: name, location, country (ID)
+    try {
+        const newShop = new Shop(req.body);
+        const shop = await newShop.save();
+        res.status(201).json(shop);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error creating shop.');
+    }
+});
+
+app.get('/api/shops', async (req, res) => {
+    try {
+        // Updated populate to match new CountryAddress fields
+        const shops = await Shop.find().populate('country', ['countryName', 'countryCode', 'Address']);
+        res.json(shops);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error fetching shops.');
+    }
+});
+
+
+app.delete('/api/shops/:id', async (req, res) => {
+    try {
+        const shopId = req.params.id;
+
+        // 1. Check if the shop exists
+        let shop = await Shop.findById(shopId);
+        if (!shop) {
+            return res.status(404).json({ msg: 'Shop not found.' });
+        }
+
+        // 2. Remove the shop
+        await Shop.findByIdAndDelete(shopId);
+
+        res.json({ msg: 'Shop removed successfully.' });
+
+    } catch (err) {
+        console.error(err.message);
+        if (err.kind === 'ObjectId') {
+            return res.status(404).json({ msg: 'Shop not found.' });
+        }
+        res.status(500).send('Server Error deleting shop.');
+    }
+});
+
+app.post('/api/flights', async (req, res) => {
+    // Requires: flightNumber, origin, destination, departureTime, price
+    try {
+        const newFlight = new Flight(req.body);
+        const flight = await newFlight.save();
+        res.status(201).json(flight);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error creating flight. (Check unique flightNumber)');
+    }
+});
+
+app.get('/api/flights', async (req, res) => {
+    try {
+        const flights = await Flight.find().sort({ departureTime: 1 });
+        res.json(flights);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error fetching flights.');
+    }
+});
+
+
+app.delete('/api/flights/:id', async (req, res) => {
+    try {
+        const flightId = req.params.id;
+
+        // 1. Check if the flight exists
+        let flight = await Flight.findById(flightId);
+        if (!flight) {
+            return res.status(404).json({ msg: 'Flight not found.' });
+        }
+
+        // 2. Remove the flight
+        await Flight.findByIdAndDelete(flightId);
+
+        res.json({ msg: 'Flight removed successfully.' });
+
+    } catch (err) {
+        console.error(err.message);
+        if (err.kind === 'ObjectId') {
+            return res.status(404).json({ msg: 'Flight not found.' });
+        }
+        res.status(500).send('Server Error deleting flight.');
+    }
+});
+
+app.post('/api/orders', async (req, res) => {
+    // Requires: items array, totalAmount
+    try {
+        const newOrder = new Order(req.body);
+        const order = await newOrder.save();
+        res.status(201).json(order);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error creating order.');
+    }
+});
+
+// @route   GET /api/orders
+// @desc    Get all orders
+app.get('/api/orders', async (req, res) => {
+    try {
+        const orders = await Order.find().sort({ orderDate: -1 });
+        res.json(orders);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error fetching orders.');
+    }
+});
 
 // Start the server
 app.listen(PORT, () => {
