@@ -2,13 +2,28 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken'); 
 const dotenv = require('dotenv');
 
-
 dotenv.config();
 
 const User = require('../models/User');
 
 
-// ... existing imports ...
+/**
+ * Generates a random alphanumeric string for the Cabinet ID.
+ * @param {number} length The desired length of the ID.
+ * @returns {string} The generated ID.
+ */
+function generateCabinetId(length = 8) {
+    // Define characters: 0-9 and A-Z (excluding confusing chars like I, O, l, 0)
+    const characters = '123456789ABCDEFGHJKLMNPQRSTUVWXYZ'; 
+    let id = '';
+    const charactersLength = characters.length;
+    
+    // Use Math.random() for randomness
+    for (let i = 0; i < length; i++) {
+        id += characters.charAt(Math.floor(Math.random() * charactersLength));
+    }
+    return id;
+}
 
 exports.registerAdmin = async (req, res) => {
     try {
@@ -17,7 +32,7 @@ exports.registerAdmin = async (req, res) => {
             password
         } = req.body;
 
-        const placeholder = 'Admin Default';
+        const placeholder = 'Admin';
         const placeholderPhone = '000-000-0000'; 
 
         let user = await User.findOne({ email });
@@ -48,7 +63,7 @@ exports.registerAdmin = async (req, res) => {
     }
 };
 
-exports.registerUser = async (req, res) => {
+exports.registerUser = async (req, res, next) => {
     try {
         const { 
             email, 
@@ -68,20 +83,50 @@ exports.registerUser = async (req, res) => {
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
+        // --- NEW ID GENERATION AND UNIQUENESS CHECK ---
+        let cabinetId;
+        let existingUser;
+        let attempts = 0;
+        
+        do {
+            cabinetId = generateCabinetId(); 
+            // Check if this ID already exists
+            existingUser = await User.findOne({ cabinetId }); 
+            attempts++;
+        } while (existingUser && attempts < 5); 
+        
+        if (existingUser) {
+            console.error("Failed to generate unique Cabinet ID.");
+            return res.status(500).send('Registration failed due to ID generation error.');
+        }
+        // --------------------------------------------------
+
+        // 3. Create new user instance, assigning the generated ID
         user = new User({
             email,
             password: hashedPassword, 
             firstName,
             lastName,
             phoneNumber,
-            address
+            address,
+            cabinetId: cabinetId // <-- Assign the unique ID here
         });
 
         await user.save();
 
-        // 4. Send success response
         console.log(`New user registered: ${email}`);
-        res.status(201).send({ message: 'User registered successfully!' });
+        res.status(201).send({ 
+            message: 'User registered successfully!', 
+            user: {
+                id: user._id,
+                role: user.role,
+                email: user.email,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                cabinetId: user.cabinetId // Send the ID back
+            }
+        });
+        
 
     } catch (err) {
         console.error(err.message);
@@ -128,7 +173,10 @@ exports.loginUser = async (req, res) => {
                 res.json({ 
                     token,
                     role: user.role,
-                    name: email
+                    email: email,
+                    firstName: user.firstName,
+                    lastName: user.lastName,
+                    cabinetId: user.cabinetId
                 });
             }
         );

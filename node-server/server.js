@@ -4,6 +4,7 @@ const dotenv = require('dotenv');
 const cors = require('cors');
 
 const authController = require('./controllers/authController'); 
+const orderController = require('./controllers/orderController');
 const auth = require('./middleware/authMiddleware');
 const CountryAddress = require('./models/CountryAddress');
 const Shop = require('./models/Shops');
@@ -186,29 +187,28 @@ app.delete('/api/flights/:id', async (req, res) => {
     }
 });
 
-app.post('/api/orders', async (req, res) => {
-    // Requires: items array, totalAmount
-    try {
-        const newOrder = new Order(req.body);
-        const order = await newOrder.save();
-        res.status(201).json(order);
-    } catch (err) {
-        console.error(err.message);
-        res.status(500).send('Server Error creating order.');
-    }
+const ORDER_STATUSES = [
+    'Accepted', 
+    'OnTheWay', 
+    'Arrived', 
+    'Delivered',
+];
+
+app.get('/api/orders/statuses', (req, res) => {
+    res.json(ORDER_STATUSES); 
 });
 
-// @route   GET /api/orders
-// @desc    Get all orders
-app.get('/api/orders', async (req, res) => {
-    try {
-        const orders = await Order.find().sort({ orderDate: -1 });
-        res.json(orders);
-    } catch (err) {
-        console.error(err.message);
-        res.status(500).send('Server Error fetching orders.');
-    }
-});
+app.get('/api/orders', orderController.getAllOrders); 
+
+app.post('/api/orders', orderController.createOrder); 
+
+app.patch('/api/orders/:id/status', orderController.updateOrderStatus);
+
+app.delete('/api/orders/:id', orderController.deleteOrder);
+
+app.get('/api/orders/user/:cabinetId', orderController.getOrdersByCabinetId);
+
+app.patch('/api/orders/:id/declare', orderController.updateDeclarationStatus);
 
 // Start the server
 app.listen(PORT, () => {
