@@ -37,6 +37,11 @@ const UserSchema = new mongoose.Schema({
         uppercase: true,
         index: true,
     },
+    balance: {
+        type: Number,
+        default: 0,
+        min: 0
+    },
     date: {
         type: Date,
         default: Date.now

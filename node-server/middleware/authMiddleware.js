@@ -3,32 +3,36 @@ const dotenv = require('dotenv');
 
 dotenv.config();
 
-// Middleware function to protect routes
 module.exports = function (req, res, next) {
-    // 1. Get token from header
-    // The convention is to send the token in a header called 'x-auth-token'
-    const token = req.header('x-auth-token');
+    // 1. Get token from the standard Authorization header
+    // The header will look like: Authorization: Bearer <token>
+    const authHeader = req.header('Authorization');
 
-    // 2. Check if token exists
-    if (!token) {
-        // 401 Unauthorized - The request requires user authentication
+    // 2. Check if Authorization header exists
+    if (!authHeader) {
         return res.status(401).json({ msg: 'No token, authorization denied' });
     }
 
+    // 3. Extract the token by checking for the 'Bearer ' prefix
+    const token = authHeader.replace('Bearer ', '');
+    
+    // Fallback/Safety check: if token extraction failed or header format is wrong
+    if (!token || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ msg: 'Authorization header is malformed (expected: Bearer <token>)' });
+    }
+    
     try {
-        // 3. Verify token
-        // This function verifies the signature using the secret and decodes the payload
+        // 4. Verify token
         const decoded = jwt.verify(token, process.env.JWT_SECRET); 
 
-        // 4. Attach user data to the request object
-        // The 'decoded' payload contains the user ID we embedded during login
+        // 5. Attach user data to the request object
         req.user = decoded.user; 
 
-        // 5. Move to the next middleware or route handler
+        // 6. Move to the next middleware or route handler
         next(); 
 
     } catch (err) {
-        // If verification fails (e.g., token expired, invalid secret, or tampered)
+        // If verification fails (e.g., expired or invalid signature)
         res.status(401).json({ msg: 'Token is not valid' });
     }
 };

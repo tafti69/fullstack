@@ -17,24 +17,20 @@ exports.getAllOrders = async (req, res) => {
     }
 };
 
-// POST create new order
 exports.createOrder = async (req, res) => {
-    const { trackingId, weight, cabinetId, countryId } = req.body;
-
+    const { trackingId, weight, cabinetId, countryId, flightId } = req.body;
     try {
-        // 1. Validate inputs (basic)
-        if (!trackingId || !weight || !cabinetId || !countryId) {
+        if (!trackingId || !weight || !cabinetId || !countryId || !flightId) {
             return res.status(400).send('Missing required order fields.');
         }
 
         const existingOrder = await Order.findOne({ trackingId });
         if (existingOrder) {
-            return res.status(409).send('Tracking ID already exists. Orders must be unique.'); // 409 Conflict
+            return res.status(409).send('Tracking ID already exists. Orders must be unique.'); 
         }
         
         const existingUser = await User.findOne({ cabinetId });
         if (!existingUser) {
-            // It's a bad request if the ID doesn't link to a user
             return res.status(400).send(`Invalid Cabinet ID: No user found with ID '${cabinetId}'.`); 
         }
 
@@ -43,24 +39,21 @@ exports.createOrder = async (req, res) => {
             return res.status(404).send('Origin country not found for tariff calculation.');
         }
 
-        const tariffPrice = country.price;
-        
-        // 3. Calculate Price
+        const tariffPrice = country.price;      
         const calculatedPrice = weight * tariffPrice;
 
-        // 4. Create the new Order
         const newOrder = new Order({
             trackingId,
             weight,
             cabinetId,
-            country: countryId, // Store the reference ID
-            price: calculatedPrice, // Store the calculated price
+            flight: flightId,
+            country: countryId, 
+            price: calculatedPrice, 
             status: 'Accepted' // Default status
         });
 
         await newOrder.save();
-        
-        // 5. Populate and return the newly created order
+ 
         const createdOrder = await Order.findById(newOrder._id)
             .populate('country', 'countryName countryCode price')
             .populate('flight', 'flightNumber departureTime');
@@ -69,7 +62,6 @@ exports.createOrder = async (req, res) => {
         
     } catch (err) {
         console.error('Order creation failed:', err.message);
-        // Handle unique key error for trackingId
         if (err.code === 11000) {
             return res.status(400).send('Tracking ID already exists.');
         }

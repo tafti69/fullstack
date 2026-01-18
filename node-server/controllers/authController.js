@@ -186,3 +186,34 @@ exports.loginUser = async (req, res) => {
         res.status(500).send('Server Error during login.');
     }
 };
+
+exports.getMe = async (req, res) => {
+    try {
+        // req.user.id is populated by the authMiddleware
+        const user = await User.findById(req.user.id).select('-password');
+
+        if (!user) {
+            // Highly unlikely if authMiddleware passed, but good for safety
+            return res.status(404).json({ message: 'User not found.' });
+        }
+
+        // Return the user object (excluding the password)
+        res.json(user);
+
+    } catch (error) {
+        console.error('Controller Error fetching user profile:', error);
+        res.status(500).json({ message: 'Server error while fetching profile.' });
+    }
+};
+
+exports.getAllUsers = async (req, res) => {
+    try {
+        // Fetch all users but exclude the password field
+        const users = await User.find().select('-password');
+        res.json(users);
+        
+    } catch (error) {
+        console.error('Fetch Users List Error:', error);
+        res.status(500).json({ message: 'Server error while fetching user list.' });
+    }
+};
